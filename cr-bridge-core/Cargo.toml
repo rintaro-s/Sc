@@ -1,0 +1,34 @@
+[package]
+name = "cr-bridge-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CR-Bridge: Cross-Reality Low-Layer Middleware Core Library"
+keywords = ["xr", "vr", "ar", "middleware", "kalman-filter"]
+categories = ["science", "network-programming"]
+
+[dependencies]
+nalgebra = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+rand = { workspace = true }
+rosc = { workspace = true }
+parking_lot = { workspace = true }
+futures-util = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+approx = "0.5"
+
+[features]
+default = ["simd-auto"]
+# 実行時にSIMDを自動検出（安定版Rustで動作）
+simd-auto = []
+# AVX-512 FMA の強制有効化（コンパイル時に-C target-feature=+avx512fが必要）
+avx512 = []
+# NEON (ARM) の強制有効化
+neon = []

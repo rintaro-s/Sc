@@ -1,0 +1,74 @@
+// CR-Bridge Spatial Entity FlatBuffers スキーマ
+// このスキーマが全コンポーネント間の共通データフォーマットを定義する
+
+namespace crbridge;
+
+// 3次元ベクトル
+struct Vec3f {
+  x: float32;
+  y: float32;
+  z: float32;
+}
+
+// クォータニオン（姿勢）
+struct Quaternionf {
+  w: float32;
+  x: float32;
+  y: float32;
+  z: float32;
+}
+
+// ATP パケット：Anti-Teleport Protocol の基本伝送単位
+// 速度・加速度・角速度を含むことで、受信端での物理予測を可能にする
+table ATPPacket {
+  entity_id:      uint64;     // エンティティの一意識別子
+  timestamp_us:   uint64;     // 送信側マイクロ秒タイムスタンプ（補間基点）
+  sequence:       uint32;     // シーケンス番号（欠落検知用）
+  position:       Vec3f;      // 現在座標 [x, y, z]
+  velocity:       Vec3f;      // 速度ベクトル [vx, vy, vz] m/s
+  acceleration:   Vec3f;      // 加速度 [ax, ay, az] m/s²
+  orientation:    Quaternionf;// 姿勢クォータニオン [qw, qx, qy, qz]
+  angular_velocity: Vec3f;    // 角速度 [wx, wy, wz] rad/s（IMUデータ）
+  imu_confidence: float32;    // IMUデータ信頼度 [0.0-1.0]（EKF観測ノイズに使用）
+  entity_type:    EntityType; // エンティティ種別
+  source_bridge:  BridgeType; // データソース種別
+}
+
+// エンティティ種別
+enum EntityType: uint8 {
+  Unknown = 0,
+  VRAvatar = 1,       // VRChatアバター
+  SNSPost = 2,        // SNS投稿（座標付き）
+  ARObject = 3,       // AR仮想オブジェクト
+  RealLandmark = 4,   // 現実ランドマーク
+}
+
+// ブリッジ種別
+enum BridgeType: uint8 {
+  Unknown = 0,
+  VRChatOSC = 1,
+  TwitterStream = 2,
+  InstagramGraph = 3,
+  ARVPS = 4,
+  Direct = 5,
+}
+
+// SMSL エントリ：Shared Memory Spatial Ledger の1エントリ
+table SMSLEntry {
+  entity_id:      uint64;
+  s2_cell_id:     uint64;     // S2 Geometry セルID（空間インデックス）
+  last_updated:   uint64;     // 最終更新マイクロ秒タイムスタンプ
+  ttl_ms:         uint32;     // キャッシュ有効期限 (ms)
+  packet:         ATPPacket;  // 最新パケット
+  predicted_pos:  Vec3f;      // EKF予測位置（補間後）
+  predicted_quat: Quaternionf;// EKF予測姿勢
+}
+
+// フレームバッチ：複数エンティティをまとめて送信
+table FrameBatch {
+  frame_id:       uint64;
+  timestamp_us:   uint64;
+  entries:        [SMSLEntry];
+}
+
+root_type FrameBatch;

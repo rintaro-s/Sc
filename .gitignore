@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# eBPF build
+*.o
+*.bpf.c.bk
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Node/Web
+node_modules/
+
+# Misc
+CACHEDIR.TAG

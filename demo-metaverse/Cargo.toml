@@ -1,0 +1,26 @@
+[package]
+name = "demo-metaverse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CR-Bridge Demo Metaverse - テレポートなしの仮想空間デモ"
+
+[[bin]]
+name = "demo-metaverse"
+path = "src/main.rs"
+
+[dependencies]
+cr-bridge-core = { path = "../cr-bridge-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+rand = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+futures-util = { workspace = true }
+parking_lot = { workspace = true }
+rosc = { workspace = true }
