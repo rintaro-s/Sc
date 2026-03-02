@@ -1,0 +1,17 @@
+{
+  "name": "com.cr-bridge.cas-adapter",
+  "version": "0.4.0",
+  "displayName": "CR-Bridge CAS Adapter",
+  "description": "CAS (CR-Absolute-Space) coordinate adapter and Metaverse WebSocket client for Unity",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "documentationUrl": "https://github.com/CrBridge/cr-bridge",
+  "changelogUrl": "https://github.com/CrBridge/cr-bridge/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/CrBridge/cr-bridge/blob/main/LICENSE",
+  "author": {
+    "name": "CR-Bridge Contributors",
+    "url": "https://github.com/CrBridge/cr-bridge"
+  },
+  "keywords": ["CAS", "CR-Bridge", "metaverse", "coordinate", "VR", "3D"],
+  "license": "MIT"
+}

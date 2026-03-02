@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# ============================================================
+#  CR-Bridge 統合ランチャー
+#  cr-bridge-daemon + metaverse-server を同時起動
+# ============================================================
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DAEMON_BIN="${CR_BRIDGE_BIN:-$HOME/.local/bin/cr-bridge-daemon}"
+SERVER_DIR="$REPO_DIR/metaverse-server"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/cr-bridge"
+
+# カラー出力
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# PIDファイル
+PID_DIR="$LOG_DIR/pids"
+DAEMON_PID_FILE="$PID_DIR/daemon.pid"
+SERVER_PID_FILE="$PID_DIR/server.pid"
+
+mkdir -p "$LOG_DIR" "$PID_DIR"
+
+log_info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
+log_ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+banner() {
+cat << 'EOF'
+  ____  ____       ____       _     _
+ / ___|  _ \      | __ ) _ __(_) __| | __ _  ___
+| |   | |_) |_____|  _ \| '__| |/ _` |/ _` |/ _ \
+| |___|  _ <______| |_) | |  | | (_| | (_| |  __/
+ \____|_| \_\     |____/|_|  |_|\__,_|\__, |\___|
+                                       |___/
+ 統合メタバース基盤  v0.1.0
+EOF
+}
+
+# クリーンアップ関数
+cleanup() {
+  log_warn "シャットダウン中..."
+  
+  if [[ -f "$SERVER_PID_FILE" ]]; then
+    SERVER_PID=$(cat "$SERVER_PID_FILE")
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+      log_info "metaverse-server を停止中... (PID: $SERVER_PID)"
+      kill "$SERVER_PID" 2>/dev/null || true
+      sleep 1
+      kill -9 "$SERVER_PID" 2>/dev/null || true
+    fi
+    rm -f "$SERVER_PID_FILE"
+  fi
+
+  if [[ -f "$DAEMON_PID_FILE" ]]; then
+    DAEMON_PID=$(cat "$DAEMON_PID_FILE")
+    if kill -0 "$DAEMON_PID" 2>/dev/null; then
+      log_info "cr-bridge-daemon を停止中... (PID: $DAEMON_PID)"
+      kill "$DAEMON_PID" 2>/dev/null || true
+      sleep 1
+      kill -9 "$DAEMON_PID" 2>/dev/null || true
+    fi
+    rm -f "$DAEMON_PID_FILE"
+  fi
+
+  log_ok "クリーンアップ完了"
+  exit 0
+}
+
+trap cleanup SIGINT SIGTERM EXIT
+
+# ====== メイン処理 ======
+
+MODE="${1:-start}"
+
+case "$MODE" in
+  stop)
+    log_info "全サービスを停止します..."
+    cleanup
+    ;;
+    
+  status)
+    echo -e "\n${BOLD}=== CR-Bridge サービス状態 ===${NC}\n"
+    
+    if [[ -f "$DAEMON_PID_FILE" ]] && kill -0 "$(cat "$DAEMON_PID_FILE")" 2>/dev/null; then
+      log_ok "cr-bridge-daemon: 実行中 (PID: $(cat "$DAEMON_PID_FILE"))"
+    else
+      log_warn "cr-bridge-daemon: 停止中"
+    fi
+    
+    if [[ -f "$SERVER_PID_FILE" ]] && kill -0 "$(cat "$SERVER_PID_FILE")" 2>/dev/null; then
+      log_ok "metaverse-server: 実行中 (PID: $(cat "$SERVER_PID_FILE"))"
+    else
+      log_warn "metaverse-server: 停止中"
+    fi
+    
+    echo ""
+    exit 0
+    ;;
+    
+  start|"")
+    banner
+    echo ""
+    log_info "CR-Bridge 統合メタバース基盤を起動します"
+    echo ""
+
+    # ====== 1. cr-bridge-daemon 起動 ======
+    log_info "[1/2] cr-bridge-daemon を起動中..."
+    
+    if [[ ! -f "$DAEMON_BIN" ]]; then
+      log_warn "cr-bridge-daemon が見つかりません。ビルドします..."
+      cd "$REPO_DIR"
+      cargo build --release --bin cr-bridge-daemon
+      DAEMON_BIN="$REPO_DIR/target/release/cr-bridge-daemon"
+    fi
+
+    RUST_LOG="${RUST_LOG:-info}" \
+    "$DAEMON_BIN" \
+      > "$LOG_DIR/daemon.log" 2>&1 &
+    
+    DAEMON_PID=$!
+    echo "$DAEMON_PID" > "$DAEMON_PID_FILE"
+    
+    sleep 1
+    
+    if kill -0 "$DAEMON_PID" 2>/dev/null; then
+      log_ok "cr-bridge-daemon 起動完了 (PID: $DAEMON_PID)"
+      log_info "  OSC受信: 0.0.0.0:9001"
+      log_info "  CAS UDP: 0.0.0.0:9101"
+      log_info "  ログ: $LOG_DIR/daemon.log"
+    else
+      log_error "cr-bridge-daemon の起動に失敗しました"
+      cat "$LOG_DIR/daemon.log" | tail -20
+      exit 1
+    fi
+
+    # ====== 2. metaverse-server 起動 ======
+    log_info "[2/2] metaverse-server を起動中..."
+    
+    if [[ ! -f "$SERVER_DIR/target/release/metaverse-server" ]]; then
+      log_warn "metaverse-server が見つかりません。ビルドします..."
+      cd "$SERVER_DIR"
+      cargo build --release
+    fi
+
+    PORT="${PORT:-8080}"
+    STATIC_DIR="${STATIC_DIR:-$SERVER_DIR/static}"
+
+    cd "$SERVER_DIR"
+    RUST_LOG="${RUST_LOG:-info}" \
+    PORT="$PORT" \
+    STATIC_DIR="$STATIC_DIR" \
+    cargo run --release \
+      > "$LOG_DIR/server.log" 2>&1 &
+    
+    SERVER_PID=$!
+    echo "$SERVER_PID" > "$SERVER_PID_FILE"
+    
+    sleep 2
+    
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+      log_ok "metaverse-server 起動完了 (PID: $SERVER_PID)"
+      log_info "  HTTP: http://localhost:$PORT"
+      log_info "  WebSocket: ws://localhost:$PORT/ws"
+      log_info "  ログ: $LOG_DIR/server.log"
+    else
+      log_error "metaverse-server の起動に失敗しました"
+      cat "$LOG_DIR/server.log" | tail -20
+      exit 1
+    fi
+
+    # ====== 起動完了 ======
+    echo ""
+    echo -e "${GREEN}${BOLD}=====================================${NC}"
+    echo -e "${GREEN}${BOLD}  CR-Bridge 起動完了！               ${NC}"
+    echo -e "${GREEN}${BOLD}=====================================${NC}"
+    echo ""
+    echo -e "  ${BOLD}ブラウザで開く:${NC}"
+    echo -e "  ${CYAN}  http://localhost:$PORT${NC}"
+    echo ""
+    echo -e "  ${BOLD}ログ監視:${NC}"
+    echo -e "  ${CYAN}  tail -f $LOG_DIR/daemon.log${NC}"
+    echo -e "  ${CYAN}  tail -f $LOG_DIR/server.log${NC}"
+    echo ""
+    echo -e "  ${BOLD}停止:${NC}"
+    echo -e "  ${CYAN}  $0 stop${NC}"
+    echo -e "  ${YELLOW}または Ctrl+C${NC}"
+    echo ""
+
+    # ====== ログをテール（フォアグラウンド） ======
+    log_info "ログを表示します (Ctrl+C で終了)..."
+    echo ""
+    
+    tail -f "$LOG_DIR/daemon.log" "$LOG_DIR/server.log" &
+    TAIL_PID=$!
+    
+    # シグナル待機
+    wait "$TAIL_PID" 2>/dev/null || true
+    ;;
+    
+  *)
+    echo "Usage: $0 {start|stop|status}"
+    echo ""
+    echo "  start   - 全サービスを起動（デフォルト）"
+    echo "  stop    - 全サービスを停止"
+    echo "  status  - サービス状態を表示"
+    exit 1
+    ;;
+esac

@@ -1,0 +1,43 @@
+[package]
+name = "metaverse-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CR-Bridge Metaverse Server – World Service + Presence + State Replication"
+
+[[bin]]
+name = "metaverse-server"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio        = { workspace = true }
+futures-util = { workspace = true }
+
+# Web / WebSocket
+axum         = { workspace = true }
+tower        = { workspace = true }
+tower-http   = { workspace = true }
+
+# Serialization
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+
+# Logging
+tracing             = { workspace = true }
+tracing-subscriber  = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow    = "1"
+
+# Utilities
+parking_lot = { workspace = true }
+rand        = { workspace = true }
+uuid        = { version = "1", features = ["v4"] }
+bytes       = { workspace = true }
+jsonwebtoken = "9"
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Core library
+cr-bridge-core = { path = "../cr-bridge-core" }

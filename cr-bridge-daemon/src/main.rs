@@ -11,12 +11,13 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::interval;
+use tokio::{net::UdpSocket, time::interval};
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::EnvFilter;
 
 use cr_bridge_core::atp::ekf::EKFConfig;
 use cr_bridge_core::atp::engine::ATPEngine;
+use cr_bridge_core::bridges::CRSBridge;
 use cr_bridge_core::bridges::osc::{OSCBridgeConfig, VRChatOSCBridge};
 use cr_bridge_core::sma::SIMDInfo;
 
@@ -80,29 +81,52 @@ async fn main() -> anyhow::Result<()> {
     info!("VRChat OSC Bridge を起動します (ポート {})", osc_port);
     info!("VRChat の OSC 送信先を 127.0.0.1:{} に設定してください", osc_port);
 
-    // シグナルハンドリング
-    let ctrl_c = tokio::signal::ctrl_c();
+    // OSC Bridge タスク
+    let osc_task = tokio::spawn(async move {
+        if let Err(e) = bridge.run().await {
+            warn!("OSC Bridge エラー: {}", e);
+        }
+    });
 
-    tokio::select! {
-        _ = ctrl_c => {
-            info!("シャットダウンシグナルを受信しました。終了します...");
-        }
-        result = bridge.run() => {
-            if let Err(e) = result {
-                warn!("OSC Bridge エラー: {}. OSC なしで動作継続します", e);
-                // OSC が失敗してもデーモン自体は継続
-                loop {
-                    tokio::time::sleep(Duration::from_secs(60)).await;
-                }
-            }
-        }
-    }
+    // CAS Bridge タスク（UDP :9101）
+    let cas_engine = Arc::clone(&engine);
+    let cas_task = tokio::spawn(async move {
+        cas_listener(cas_engine).await;
+    });
+
+    // シグナルハンドリング
+    tokio::signal::ctrl_c().await?;
+    info!("シャットダウンシグナルを受信しました。終了します...");
 
     stats_task.abort();
     tick_task.abort();
+    osc_task.abort();
+    cas_task.abort();
 
     info!("CR-Bridge Daemon を終了しました");
     Ok(())
+}
+
+async fn cas_listener(engine: Arc<ATPEngine>) {
+    match UdpSocket::bind("0.0.0.0:9101").await {
+        Ok(sock) => {
+            info!("CAS Bridge を起動します (UDP :9101)");
+            let mut buf = vec![0u8; 65535];
+            loop {
+                let Ok((n, _)) = sock.recv_from(&mut buf).await else { continue };
+                let Ok(text) = std::str::from_utf8(&buf[..n]) else { continue };
+                match CRSBridge::parse_json_batch(text) {
+                    Ok(packets) => {
+                        for packet in packets {
+                            engine.receive_packet(packet);
+                        }
+                    }
+                    Err(e) => warn!("CAS parse error: {}", e),
+                }
+            }
+        }
+        Err(e) => warn!("CAS Bridge を起動できません: {}", e),
+    }
 }
 
 fn print_banner() {

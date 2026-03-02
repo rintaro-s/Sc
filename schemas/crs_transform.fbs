@@ -1,0 +1,96 @@
+// CR-Bridge Coordinate Reference System (CRS) スキーマ
+// 目的: Blender / Unity / Three.js 間で座標系を絶対化し、
+//       スケール・角度・手系の差異を解消する。
+
+namespace crbridge;
+
+// 3次元ベクトル
+struct Vec3f {
+  x: float32;
+  y: float32;
+  z: float32;
+}
+
+// クォータニオン [x, y, z, w]
+struct Quaternionf {
+  x: float32;
+  y: float32;
+  z: float32;
+  w: float32;
+}
+
+// 軸ラベル
+enum Axis: uint8 {
+  XPositive = 0,
+  XNegative = 1,
+  YPositive = 2,
+  YNegative = 3,
+  ZPositive = 4,
+  ZNegative = 5,
+}
+
+// 手系
+enum Handedness: uint8 {
+  RightHanded = 0,
+  LeftHanded = 1,
+}
+
+// どのDCC/エンジン由来か
+enum SourceSpace: uint8 {
+  Unknown = 0,
+  Blender = 1,
+  Unity = 2,
+  ThreeJS = 3,
+  OpenXR = 4,
+  Custom = 255,
+}
+
+// 送信元の座標系宣言
+// unit_scale_to_meter: 送信元1unitが何メートルか
+// 例) Blender default=1.0, Unity=1.0, centimeters系=0.01
+// この情報を使って CAS (CR-Absolute-Space) へ正規化する
+// CAS 定義:
+// - RightHanded
+// - Up = +Y
+// - Forward = +Z
+// - unit = meter
+// - quaternion = [x,y,z,w] (右手系)
+table CRSFrame {
+  source: SourceSpace = Unknown;
+  handedness: Handedness = RightHanded;
+  up_axis: Axis = YPositive;
+  forward_axis: Axis = ZPositive;
+  unit_scale_to_meter: float32 = 1.0;
+  note: string;
+}
+
+// 正規化後トランスフォーム (CAS)
+table AbsoluteTransform {
+  entity_id: uint64;
+  timestamp_us: uint64;
+
+  // CAS 座標 (meters)
+  position_m: Vec3f;
+
+  // CAS 姿勢 (quaternion [x,y,z,w])
+  rotation: Quaternionf;
+
+  // CAS スケール
+  scale: Vec3f;
+
+  // 任意: 速度/角速度 (CAS)
+  linear_velocity_mps: Vec3f;
+  angular_velocity_rps: Vec3f;
+
+  // 元座標系宣言
+  source_frame: CRSFrame;
+}
+
+// 1フレームバッチ
+table AbsoluteTransformBatch {
+  frame_id: uint64;
+  timestamp_us: uint64;
+  transforms: [AbsoluteTransform];
+}
+
+root_type AbsoluteTransformBatch;

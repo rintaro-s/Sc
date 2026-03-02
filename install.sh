@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  CR-Bridge インストーラー
-#  Usage: ./install.sh [--demo-only] [--uninstall]
+#  Usage: ./install.sh [--uninstall]
 # ============================================================
 set -euo pipefail
 
@@ -39,15 +39,12 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 log_step()  { echo -e "\n${BOLD}▶ $*${NC}"; }
 
 # ====== 引数処理 ======
-DEMO_ONLY=false
 UNINSTALL=false
 for arg in "$@"; do
   case "$arg" in
-    --demo-only) DEMO_ONLY=true ;;
     --uninstall) UNINSTALL=true ;;
     --help|-h)
-      echo "Usage: $0 [--demo-only] [--uninstall]"
-      echo "  --demo-only   デモアプリのみインストール"
+      echo "Usage: $0 [--uninstall]"
       echo "  --uninstall   CR-Bridge を削除"
       exit 0 ;;
   esac
@@ -59,7 +56,7 @@ if $UNINSTALL; then
   systemctl --user stop cr-bridge-daemon.service 2>/dev/null || true
   systemctl --user disable cr-bridge-daemon.service 2>/dev/null || true
   rm -f "$SYSTEMD_USER_DIR/cr-bridge-daemon.service"
-  rm -f "$BIN_DIR/cr-bridge-daemon" "$BIN_DIR/cr-bridge-demo"
+  rm -f "$BIN_DIR/cr-bridge-daemon"
   rm -rf "$LIB_DIR"
   log_ok "アンインストール完了"
   exit 0
@@ -134,41 +131,22 @@ else
   log_info "AVX-512 非対応CPU。スカラーフォールバックを使用します"
 fi
 
-if $DEMO_ONLY; then
-  log_info "デモのみビルドします..."
-  cargo build --release -p demo-metaverse
-else
-  log_info "全コンポーネントをビルドします..."
-  cargo build --release
-fi
+log_info "全コンポーネントをビルドします..."
+cargo build --release
 
 log_ok "ビルド完了"
 
 # ====== インストール ======
 log_step "バイナリをインストールしています..."
 
-if ! $DEMO_ONLY; then
-  if [[ -f "$REPO_DIR/target/release/cr-bridge-daemon" ]]; then
-    cp "$REPO_DIR/target/release/cr-bridge-daemon" "$BIN_DIR/"
-    chmod +x "$BIN_DIR/cr-bridge-daemon"
-    log_ok "cr-bridge-daemon → $BIN_DIR/cr-bridge-daemon"
-  fi
-fi
-
-if [[ -f "$REPO_DIR/target/release/demo-metaverse" ]]; then
-  cp "$REPO_DIR/target/release/demo-metaverse" "$BIN_DIR/cr-bridge-demo"
-  chmod +x "$BIN_DIR/cr-bridge-demo"
-  log_ok "demo-metaverse → $BIN_DIR/cr-bridge-demo"
-fi
-
-# デモの静的ファイルをコピー
-if [[ -d "$REPO_DIR/demo-metaverse/static" ]]; then
-  cp -r "$REPO_DIR/demo-metaverse/static" "$LIB_DIR/"
-  log_ok "静的ファイル → $LIB_DIR/static"
+if [[ -f "$REPO_DIR/target/release/cr-bridge-daemon" ]]; then
+  cp "$REPO_DIR/target/release/cr-bridge-daemon" "$BIN_DIR/"
+  chmod +x "$BIN_DIR/cr-bridge-daemon"
+  log_ok "cr-bridge-daemon → $BIN_DIR/cr-bridge-daemon"
 fi
 
 # ====== systemd ユーザーサービス（オプション） ======
-if ! $DEMO_ONLY && command -v systemctl &>/dev/null; then
+if command -v systemctl &>/dev/null; then
   log_step "systemd ユーザーサービスを設定しています..."
   mkdir -p "$SYSTEMD_USER_DIR"
   cat > "$SYSTEMD_USER_DIR/cr-bridge-daemon.service" << SERVICE
@@ -221,15 +199,9 @@ echo -e "${GREEN}${BOLD}=====================================${NC}"
 echo -e "${GREEN}${BOLD}  CR-Bridge インストール完了！       ${NC}"
 echo -e "${GREEN}${BOLD}=====================================${NC}"
 echo ""
-echo -e "  ${BOLD}デモを起動するには:${NC}"
-echo -e "  ${CYAN}  cr-bridge-demo${NC}"
-echo -e "  ブラウザで ${CYAN}http://localhost:3000${NC} を開いてください"
+echo -e "  ${BOLD}デーモンを起動するには:${NC}"
+echo -e "  ${CYAN}  cr-bridge-daemon${NC}"
 echo ""
-if ! $DEMO_ONLY; then
-  echo -e "  ${BOLD}デーモンを起動するには:${NC}"
-  echo -e "  ${CYAN}  cr-bridge-daemon${NC}"
-  echo ""
-fi
 echo -e "  ${BOLD}ログ:${NC} $LOG_DIR/"
 echo ""
 

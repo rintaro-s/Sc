@@ -1,0 +1,27 @@
+{
+  "name": "@cr-bridge/threejs-adapter",
+  "version": "0.4.0",
+  "description": "CR-Bridge CAS coordinate adapter and metaverse client for Three.js",
+  "type": "module",
+  "main": "./crbCoordinateAdapter.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./crbCoordinateAdapter.js",
+      "types": "./index.d.ts"
+    }
+  },
+  "keywords": ["cr-bridge", "threejs", "metaverse", "CAS", "coordinate", "vr", "3d"],
+  "author": "CR-Bridge Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CrBridge/cr-bridge"
+  },
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "peerDependenciesMeta": {
+    "three": { "optional": true }
+  }
+}

@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CR-Bridge Metaverse</title>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.168.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; background: #0a0a0f; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+/* ─── Three.js キャンバス ─── */
+#canvas { display: block; width: 100%; height: 100%; }
+
+/* ─── CSS2D ラベル (名前タグ) ─── */
+.name-tag {
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 13px;
+  pointer-events: none;
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.2);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+}
+
+/* ─── ログイン画面 ─── */
+#login-screen {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+  z-index: 100;
+}
+.login-box {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding: 40px 48px;
+  min-width: 340px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.login-box h1 {
+  font-size: 28px; font-weight: 700;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.login-box p { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 28px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; color: rgba(255,255,255,0.7); font-size: 12px; margin-bottom: 6px; letter-spacing: 0.5px; }
+.form-group input[type="text"],
+.form-group input[type="color"],
+.form-group select {
+  width: 100%; padding: 10px 14px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px; color: #fff; font-size: 14px;
+  transition: border-color 0.2s;
+}
+.form-group input[type="text"]:focus,
+.form-group select:focus { outline: none; border-color: #667eea; }
+.form-group input[type="color"] { height: 40px; cursor: pointer; }
+.form-group select option { background: #1a1a2e; }
+#btn-connect {
+  width: 100%; padding: 12px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none; border-radius: 8px;
+  color: #fff; font-size: 15px; font-weight: 600;
+  cursor: pointer; margin-top: 8px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+#btn-connect:hover { opacity: 0.9; }
+#btn-connect:active { transform: scale(0.98); }
+#login-error { color: #f87171; font-size: 13px; margin-top: 12px; text-align: center; display: none; }
+
+/* ─── HUD ─── */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none; z-index: 10;
+  display: none;
+}
+
+/* 上部ステータスバー */
+#status-bar {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center;
+}
+.status-pill {
+  background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.85);
+  padding: 4px 12px; border-radius: 20px; font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(8px);
+}
+.status-pill.online { border-color: rgba(74,222,128,0.4); }
+.status-pill.ping-good { color: #4ade80; }
+.status-pill.ping-bad  { color: #fb923c; }
+
+/* 十字カーソル */
+#crosshair {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 20px; height: 20px; pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: ''; position: absolute;
+  background: rgba(255,255,255,0.7);
+  border-radius: 2px;
+}
+#crosshair::before { width: 2px; height: 100%; top: 0; left: 50%; transform: translateX(-50%); }
+#crosshair::after  { width: 100%; height: 2px; top: 50%; left: 0; transform: translateY(-50%); }
+
+/* ポインターロック待機 */
+#click-to-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.5);
+  pointer-events: all;
+  cursor: pointer;
+}
+#click-to-play.hidden { display: none; }
+#click-to-play-inner {
+  text-align: center; color: #fff;
+}
+#click-to-play-inner h2 { font-size: 24px; margin-bottom: 8px; }
+#click-to-play-inner p  { font-size: 14px; color: rgba(255,255,255,0.6); }
+
+/* ミニマップ */
+#minimap {
+  position: absolute; bottom: 100px; right: 20px;
+  width: 140px; height: 140px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+#minimap canvas { width: 100%; height: 100%; }
+
+/* チャット */
+#chat-area {
+  position: absolute; bottom: 100px; left: 20px;
+  width: 340px; pointer-events: none;
+}
+.chat-msg {
+  background: rgba(0,0,0,0.6);
+  color: #fff; font-size: 13px;
+  padding: 5px 10px; border-radius: 6px;
+  margin-top: 4px; max-width: 100%;
+  word-break: break-word;
+  animation: fadein 0.2s ease;
+  transition: opacity 1s;
+  border-left: 3px solid rgba(255,255,255,0.3);
+}
+.chat-msg.system { color: #a78bfa; border-color: #7c3aed; }
+.chat-msg.own    { border-color: #667eea; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* チャット入力 */
+#chat-input-area {
+  position: absolute; bottom: 24px; left: 20px; right: 20px;
+  display: none; pointer-events: all;
+}
+#chat-input-wrap {
+  display: flex; gap: 8px;
+}
+#chat-input {
+  flex: 1; background: rgba(0,0,0,0.8);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px; padding: 10px 14px;
+  color: #fff; font-size: 14px;
+}
+#chat-input:focus { outline: none; border-color: #667eea; }
+#chat-send {
+  background: #667eea; border: none; border-radius: 8px;
+  color: #fff; padding: 0 16px; cursor: pointer; font-size: 13px;
+  pointer-events: all;
+}
+
+/* キー操作ヘルプ */
+#help {
+  position: absolute; bottom: 24px; right: 20px;
+  font-size: 11px; color: rgba(255,255,255,0.35);
+  line-height: 1.8;
+}
+
+/* プレイヤー情報 */
+#player-info {
+  position: absolute; top: 16px; left: 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+.avatar-badge {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+.player-name { color: #fff; font-size: 14px; font-weight: 600; }
+.player-world { color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 2px; }
+
+/* ローディング */
+#loading {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #0a0a0f; z-index: 200; display: none;
+}
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ログイン画面 -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>CR-Bridge Metaverse</h1>
+    <p>3D Communication Platform</p>
+    <div class="form-group">
+      <label>YOUR NAME</label>
+      <input type="text" id="input-name" placeholder="Player" maxlength="24" value="">
+    </div>
+    <div class="form-group">
+      <label>AVATAR COLOR</label>
+      <input type="color" id="input-color" value="#667eea">
+    </div>
+    <div class="form-group">
+      <label>WORLD</label>
+      <select id="input-world">
+        <option value="default">CR-World (Default)</option>
+        <option value="arena">CR-Arena</option>
+      </select>
+    </div>
+    <button id="btn-connect">Enter World</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- ローディング -->
+<div id="loading"><div class="loading-spinner"></div></div>
+
+<!-- 3D キャンバス -->
+<canvas id="canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="player-info">
+    <canvas class="avatar-badge" id="avatar-badge" width="32" height="32"></canvas>
+    <div>
+      <div class="player-name" id="hud-name">Player</div>
+      <div class="player-world" id="hud-world">CR-World</div>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <div class="status-pill online" id="status-online">🟢 Online</div>
+    <div class="status-pill" id="status-ping">Ping: --ms</div>
+    <div class="status-pill" id="status-users">👥 0</div>
+  </div>
+
+  <div id="click-to-play">
+    <div id="click-to-play-inner">
+      <h2>🌐 Click to Play</h2>
+      <p>Click to lock mouse / WASD to move / Space to jump</p>
+    </div>
+  </div>
+
+  <div id="crosshair" style="display:none;"></div>
+
+  <div id="chat-area"></div>
+
+  <div id="chat-input-area">
+    <div id="chat-input-wrap">
+      <input type="text" id="chat-input" placeholder="Message... (Enter to send, Esc to close)" maxlength="300" autocomplete="off">
+      <button id="chat-send">Send</button>
+    </div>
+  </div>
+
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="140" height="140"></canvas>
+  </div>
+
+  <div id="help">
+    WASD: 移動 &nbsp;|&nbsp; Mouse: 視点
+    <br>Space: ジャンプ &nbsp;|&nbsp; Shift: 走る
+    <br>Enter: チャット &nbsp;|&nbsp; Esc: 解放
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+
+// ═══════════════════════════════════════════════════════════════
+// 定数
+// ═══════════════════════════════════════════════════════════════
+const MOVE_SPEED       = 5.0;   // m/s (歩行)
+const RUN_SPEED        = 10.0;  // m/s (走行)
+const JUMP_VELOCITY    = 6.5;   // m/s
+const GRAVITY          = -18.0; // m/s²
+const PLAYER_HEIGHT    = 0.9;   // カメラ高さ(目線)
+const POSE_INTERVAL_MS = 50;    // 送信間隔 (20Hz)
+const PING_INTERVAL_MS = 2000;  // Ping 間隔
+const INTEREST_RADIUS  = 200;   // 表示範囲 m
+
+// ═══════════════════════════════════════════════════════════════
+// グローバル状態
+// ═══════════════════════════════════════════════════════════════
+const local = {
+  id: null, name: '', color: '#667eea', worldId: 'default', worldName: 'CR-World',
+  pos: new THREE.Vector3(0, PLAYER_HEIGHT, 0),
+  vel: new THREE.Vector3(),
+  yaw: 0, pitch: 0,
+  onGround: true,
+  connected: false, inWorld: false,
+};
+
+const keys    = {};
+let mouseDX   = 0, mouseDY = 0;
+let pointerLocked = false;
+let ws        = null;
+let pingStart = 0, latency = 0;
+let userCount = 0;
+let startTime = performance.now();
+
+// リモートアバター: Map<entity_id, RemoteAvatar>
+const remoteAvatars = new Map();
+
+// ═══════════════════════════════════════════════════════════════
+// Three.js セットアップ
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+
+const css2dRenderer = new CSS2DRenderer();
+css2dRenderer.setSize(window.innerWidth, window.innerHeight);
+css2dRenderer.domElement.style.cssText =
+  'position:fixed;top:0;left:0;pointer-events:none;z-index:5;';
+document.body.appendChild(css2dRenderer.domElement);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.FogExp2(0x1a1a2e, 0.018);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 500);
+camera.position.set(0, PLAYER_HEIGHT, 0);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  css2dRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ライティング
+// ═══════════════════════════════════════════════════════════════
+scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
+
+const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+sun.position.set(60, 100, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far  = 300;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -80;
+sun.shadow.camera.right = sun.shadow.camera.top   =  80;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const hemi = new THREE.HemisphereLight(0x4488cc, 0x223322, 0.4);
+scene.add(hemi);
+
+// ═══════════════════════════════════════════════════════════════
+// スカイ
+// ═══════════════════════════════════════════════════════════════
+const sky = new Sky();
+sky.scale.setScalar(450000);
+scene.add(sky);
+const skyUniforms = sky.material.uniforms;
+skyUniforms['turbidity'].value    = 8;
+skyUniforms['rayleigh'].value     = 2;
+skyUniforms['mieCoefficient'].value = 0.005;
+skyUniforms['mieDirectionalG'].value = 0.8;
+const sunPos = new THREE.Vector3();
+sunPos.setFromSphericalCoords(1, THREE.MathUtils.degToRad(60), THREE.MathUtils.degToRad(180));
+skyUniforms['sunPosition'].value.copy(sunPos);
+
+// ═══════════════════════════════════════════════════════════════
+// ワールド環境
+// ═══════════════════════════════════════════════════════════════
+
+// GLB Loader
+const gltfLoader = new GLTFLoader();
+
+// ワールドロード設定 (ワールドIDに応じてGLBまたはプロシージャル生成)
+const worldConfigs = {
+  'default': { type: 'procedural' },  // デフォルトはプロシージャル生成
+  'arena': { type: 'procedural' },
+  'glb-demo': { type: 'glb', url: '/worlds/demo-world.glb' },  // サンプルGLBワールド
+};
+
+async function loadWorld(worldId) {
+  const config = worldConfigs[worldId] || { type: 'procedural' };
+  
+  if (config.type === 'glb' && config.url) {
+    try {
+      console.log(`[World] Loading GLB: ${config.url}`);
+      await loadWorldGLB(config.url);
+      console.log('[World] GLB loaded successfully');
+    } catch (err) {
+      console.error('[World] GLB load failed, falling back to procedural:', err);
+      buildProceduralWorld();
+    }
+  } else {
+    buildProceduralWorld();
+  }
+}
+
+function loadWorldGLB(url) {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        const worldModel = gltf.scene;
+        
+        // シャドウを有効化
+        worldModel.traverse((node) => {
+          if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+          }
+        });
+        
+        // CASメタデータがあれば適用 (オプション)
+        const casMetaUrl = url.replace('.glb', '.cas.json');
+        fetch(casMetaUrl)
+          .then(res => res.ok ? res.json() : null)
+          .then(casData => {
+            if (casData && casData.transforms && casData.transforms.length > 0) {
+              console.log('[World] Applying CAS metadata:', casData);
+              const t = casData.transforms[0];  // 最初のtransform
+              if (t.position) worldModel.position.set(...t.position);
+              if (t.rotation) {
+                const [x, y, z, w] = t.rotation;
+                worldModel.quaternion.set(x, y, z, w);
+              }
+              if (t.scale) worldModel.scale.set(...t.scale);
+            }
+          })
+          .catch(err => console.log('[World] No CAS metadata:', err.message));
+        
+        scene.add(worldModel);
+        console.log('[World] GLB added to scene');
+        resolve();
+      },
+      (xhr) => {
+        console.log(`[World] Loading: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+      },
+      (error) => {
+        console.error('[World] GLB load error:', error);
+        reject(error);
+      }
+    );
+  });
+}
+
+function buildProceduralWorld() {
+  // 地面 (チェッカーボード)
+  const groundGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x2d4a2d,
+    roughness: 0.9,
+    metalness: 0.0,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // グリッドオーバーレイ
+  const grid = new THREE.GridHelper(400, 80, 0x3d5a3d, 0x3d5a3d);
+  grid.material.opacity = 0.25;
+  grid.material.transparent = true;
+  grid.position.y = 0.01;
+  scene.add(grid);
+
+  // 中央プラットフォーム
+  addPlatform(new THREE.Vector3(0, 0, 0), 20, 0.3, 0x4a3f6b);
+
+  // 周囲の建物・オブジェクト群
+  const buildingData = [
+    { pos: [25, 0, 10],  w: 8, h: 12, d: 8,  color: 0x334455 },
+    { pos: [-30, 0, -8], w: 6, h: 18, d: 6,  color: 0x443322 },
+    { pos: [10, 0, -30], w: 10, h: 8, d: 10, color: 0x334433 },
+    { pos: [-20, 0, 25], w: 7, h: 15, d: 7,  color: 0x553344 },
+    { pos: [40, 0, -20], w: 5, h: 25, d: 5,  color: 0x445566 },
+    { pos: [-45, 0, 30], w: 12, h: 6, d: 12, color: 0x332233 },
+    { pos: [0, 0, 45],   w: 9, h: 10, d: 9,  color: 0x334455 },
+  ];
+  buildingData.forEach(b => addBuilding(b.pos, b.w, b.h, b.d, b.color));
+
+  // 光柱 (デコレーション)
+  addGlowPillar(new THREE.Vector3(0, 0, 0), 0x7c3aed);
+  addGlowPillar(new THREE.Vector3(15, 0, 15), 0x0ea5e9);
+  addGlowPillar(new THREE.Vector3(-15, 0, 15), 0x10b981);
+  addGlowPillar(new THREE.Vector3(15, 0, -15), 0xf59e0b);
+  addGlowPillar(new THREE.Vector3(-15, 0, -15), 0xef4444);
+}
+
+function addPlatform(pos, size, height, color) {
+  const geo = new THREE.BoxGeometry(size, height, size);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.3 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(pos.x, height / 2, pos.z);
+  mesh.castShadow = mesh.receiveShadow = true;
+  scene.add(mesh);
+}
+
+function addBuilding(posArr, w, h, d, color) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.2 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(posArr[0], h / 2, posArr[2]);
+  mesh.castShadow = mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  // 窓ライト
+  const winLight = new THREE.PointLight(0x88aaff, 0.5, 12);
+  winLight.position.set(posArr[0], h * 0.7, posArr[2]);
+  scene.add(winLight);
+}
+
+function addGlowPillar(pos, color) {
+  const geo = new THREE.CylinderGeometry(0.15, 0.15, 8, 8);
+  const mat = new THREE.MeshStandardMaterial({
+    color, emissive: color, emissiveIntensity: 1.0,
+    roughness: 0.3, metalness: 0.8,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(pos.x, 4, pos.z);
+  scene.add(mesh);
+
+  const light = new THREE.PointLight(color, 1.5, 15);
+  light.position.set(pos.x, 2, pos.z);
+  scene.add(light);
+}
+
+// ワールドロード (非同期)
+await loadWorld(local.worldId);
+
+// ═══════════════════════════════════════════════════════════════
+// アバター作成
+// ═══════════════════════════════════════════════════════════════
+function parseColor(colorStr) {
+  // hsl() または #rrggbb に対応
+  const c = new THREE.Color();
+  try { c.set(colorStr); } catch { c.set(0x667eea); }
+  return c;
+}
+
+function createAvatarMesh(displayName, colorStr) {
+  const color = parseColor(colorStr);
+  const group = new THREE.Group();
+
+  // ボディ
+  const bodyGeo = new THREE.CapsuleGeometry(0.28, 0.9, 4, 8);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.6,
+    metalness: 0.2,
+    envMapIntensity: 0.5,
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.55;
+  body.castShadow = true;
+  group.add(body);
+
+  // 頭
+  const headGeo = new THREE.SphereGeometry(0.22, 16, 12);
+  const headMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.3),
+    roughness: 0.5,
+    metalness: 0.1,
+  });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.y = 1.32;
+  head.castShadow = true;
+  group.add(head);
+
+  // 目 (装飾)
+  const eyeGeo = new THREE.SphereGeometry(0.05, 6, 6);
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.position.set(-0.09, 1.34, 0.18);
+  const eyeR = eyeL.clone();
+  eyeR.position.set(0.09, 1.34, 0.18);
+  group.add(eyeL, eyeR);
+
+  // 名前タグ
+  const tagEl = document.createElement('div');
+  tagEl.className = 'name-tag';
+  tagEl.textContent = displayName;
+  const label = new CSS2DObject(tagEl);
+  label.position.set(0, 1.75, 0);
+  group.add(label);
+
+  group.userData = { body, head, label, tagEl, color: colorStr, walkPhase: 0 };
+  return group;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// リモートアバター管理
+// ═══════════════════════════════════════════════════════════════
+class RemoteAvatar {
+  constructor(snapshot) {
+    this.id      = snapshot.entity_id;
+    this.name    = snapshot.display_name;
+    this.color   = snapshot.avatar_color;
+    this.mesh    = createAvatarMesh(snapshot.display_name, snapshot.avatar_color);
+
+    // 補間用バッファ
+    this.posA    = new THREE.Vector3(...snapshot.position);
+    this.posB    = new THREE.Vector3(...snapshot.position);
+    this.rotA    = new THREE.Quaternion(...snapshot.rotation); // x,y,z,w
+    this.rotB    = new THREE.Quaternion(...snapshot.rotation);
+    this.velB    = new THREE.Vector3(...snapshot.velocity);
+    this.tsA     = performance.now();
+    this.tsB     = performance.now();
+    this.t       = 1.0;
+
+    this.mesh.position.copy(this.posB);
+    scene.add(this.mesh);
+  }
+
+  receivePose(position, rotation, velocity, serverTs) {
+    this.posA.copy(this.posB);
+    this.rotA.copy(this.rotB);
+    this.tsA  = this.tsB;
+    this.posB.set(...position);
+    this.rotB.set(...rotation); // x,y,z,w
+    this.velB.set(...velocity);
+    this.tsB  = performance.now();
+    this.t    = 0.0;
+  }
+
+  update(dt) {
+    const elapsed = performance.now() - this.tsB;
+    const interval = Math.max(this.tsB - this.tsA, POSE_INTERVAL_MS);
+    // 予測補間 (dead reckoning)
+    const alpha = Math.min(1.0, elapsed / interval + dt * 5);
+    this.t = THREE.MathUtils.lerp(this.t, 1.0, Math.min(1.0, dt * 15));
+
+    // Hermite 風の補間
+    const t = easeInOut(Math.min(1.0, alpha));
+    this.mesh.position.lerpVectors(this.posA, this.posB, t);
+    // dead reckoning で予測
+    if (elapsed > interval) {
+      const extrap = (elapsed - interval) / 1000;
+      this.mesh.position.addScaledVector(this.velB, Math.min(extrap, 0.5));
+    }
+    this.mesh.quaternion.slerpQuaternions(this.rotA, this.rotB, t);
+
+    // 歩行アニメーション
+    const speed = this.velB.length();
+    if (speed > 0.1) {
+      this.mesh.userData.walkPhase = (this.mesh.userData.walkPhase + dt * speed * 3) % (Math.PI * 2);
+      const w = this.mesh.userData.walkPhase;
+      this.mesh.userData.body.rotation.z = Math.sin(w) * 0.05;
+      this.mesh.userData.head.rotation.z = Math.sin(w * 0.5) * 0.03;
+    }
+  }
+
+  destroy() {
+    scene.remove(this.mesh);
+    this.mesh.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+  }
+}
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WebSocket 通信
+// ═══════════════════════════════════════════════════════════════
+function connectWS(name, color, worldId) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url   = `${proto}://${location.host}/ws`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    local.connected = true;
+    const userId = 'u_' + Math.random().toString(36).slice(2, 10);
+    local.id = userId;
+    send({ type: 'join_world', world_id: worldId, user_id: userId, display_name: name, avatar_color: color });
+  };
+
+  ws.onmessage = (ev) => {
+    try { handleServerMsg(JSON.parse(ev.data)); } catch {}
+  };
+
+  ws.onclose = () => {
+    local.connected = false;
+    updateStatusBar();
+    addSystemMsg('⚠️ 切断されました。再接続を試みます...');
+    setTimeout(() => connectWS(name, color, worldId), 3000);
+  };
+
+  ws.onerror = () => {};
+}
+
+function send(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
+function handleServerMsg(msg) {
+  switch (msg.type) {
+    case 'welcome':
+      // WS 確立済み
+      break;
+
+    case 'world_state':
+      local.worldId   = msg.world_id;
+      local.worldName = msg.world_name;
+      local.inWorld   = true;
+      document.getElementById('hud-world').textContent = msg.world_name;
+
+      // 既存アバターを全削除してから再生成
+      remoteAvatars.forEach(a => a.destroy());
+      remoteAvatars.clear();
+      msg.entities.forEach(e => {
+        if (e.entity_id !== local.id) {
+          remoteAvatars.set(e.entity_id, new RemoteAvatar(e));
+        }
+      });
+      userCount = remoteAvatars.size + 1;
+      updateStatusBar();
+      showHUD();
+      break;
+
+    case 'entity_joined':
+      if (msg.entity.entity_id !== local.id) {
+        if (remoteAvatars.has(msg.entity.entity_id)) {
+          remoteAvatars.get(msg.entity.entity_id).destroy();
+        }
+        remoteAvatars.set(msg.entity.entity_id, new RemoteAvatar(msg.entity));
+        userCount++;
+        updateStatusBar();
+        addSystemMsg(`👤 ${msg.entity.display_name} が入室しました`);
+      }
+      break;
+
+    case 'entity_left':
+      if (remoteAvatars.has(msg.entity_id)) {
+        const name = remoteAvatars.get(msg.entity_id).name;
+        remoteAvatars.get(msg.entity_id).destroy();
+        remoteAvatars.delete(msg.entity_id);
+        userCount = Math.max(1, userCount - 1);
+        updateStatusBar();
+        addSystemMsg(`👋 ${name} が退室しました`);
+      }
+      break;
+
+    case 'entity_pose':
+      if (remoteAvatars.has(msg.entity_id)) {
+        remoteAvatars.get(msg.entity_id).receivePose(
+          msg.position, msg.rotation, msg.velocity, msg.timestamp_ms
+        );
+      }
+      break;
+
+    case 'chat_message': {
+      const isOwn = msg.from_id === local.id;
+      addChatMsg(`${msg.from_name}: ${msg.text}`, isOwn ? 'own' : '');
+      break;
+    }
+
+    case 'pong':
+      latency = performance.now() - pingStart;
+      updateStatusBar();
+      break;
+
+    case 'error':
+      showLoginError(msg.message);
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// プレイヤーコントロール
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Enter' && !chatOpen && local.inWorld) {
+    openChat(); e.preventDefault();
+  }
+  if (e.code === 'Escape' && chatOpen) { closeChat(); }
+  if (e.code === 'Space' && !chatOpen) { e.preventDefault(); }
+});
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+document.addEventListener('mousemove', e => {
+  if (pointerLocked) {
+    mouseDX += e.movementX;
+    mouseDY += e.movementY;
+  }
+});
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+  document.getElementById('crosshair').style.display     = pointerLocked ? 'block' : 'none';
+  document.getElementById('click-to-play').className     = pointerLocked ? 'hidden' : '';
+});
+
+document.getElementById('click-to-play').addEventListener('click', () => {
+  canvas.requestPointerLock();
+});
+
+// 物理定数
+const SENSITIVITY = 0.0018;
+const tmpQuat     = new THREE.Quaternion();
+const dirFwd      = new THREE.Vector3();
+const dirRight    = new THREE.Vector3();
+const cameraDir   = new THREE.Vector3();
+let   lastPoseSent = 0;
+
+function updatePlayer(dt) {
+  if (!local.inWorld) return;
+
+  // マウス視点
+  local.yaw   -= mouseDX * SENSITIVITY;
+  local.pitch  = THREE.MathUtils.clamp(
+    local.pitch - mouseDY * SENSITIVITY,
+    -Math.PI * 0.45, Math.PI * 0.45
+  );
+  mouseDX = mouseDY = 0;
+
+  // カメラ回転適用
+  camera.quaternion.setFromEuler(new THREE.Euler(local.pitch, local.yaw, 0, 'YXZ'));
+
+  // 移動方向
+  camera.getWorldDirection(cameraDir);
+  cameraDir.y = 0;
+  cameraDir.normalize();
+  dirRight.crossVectors(cameraDir, new THREE.Vector3(0, 1, 0)).normalize();
+
+  const isRunning = keys['ShiftLeft'] || keys['ShiftRight'];
+  const speed     = isRunning ? RUN_SPEED : MOVE_SPEED;
+  const moveVec   = new THREE.Vector3();
+
+  if (keys['KeyW'] || keys['ArrowUp'])    moveVec.addScaledVector(cameraDir,  1);
+  if (keys['KeyS'] || keys['ArrowDown'])  moveVec.addScaledVector(cameraDir, -1);
+  if (keys['KeyA'] || keys['ArrowLeft'])  moveVec.addScaledVector(dirRight,  -1);
+  if (keys['KeyD'] || keys['ArrowRight']) moveVec.addScaledVector(dirRight,   1);
+
+  if (moveVec.lengthSq() > 0) {
+    moveVec.normalize().multiplyScalar(speed);
+    local.vel.x = moveVec.x;
+    local.vel.z = moveVec.z;
+  } else {
+    local.vel.x *= Math.pow(0.1, dt);
+    local.vel.z *= Math.pow(0.1, dt);
+  }
+
+  // ジャンプ
+  if ((keys['Space']) && local.onGround) {
+    local.vel.y   = JUMP_VELOCITY;
+    local.onGround = false;
+  }
+
+  // 重力
+  if (!local.onGround) {
+    local.vel.y += GRAVITY * dt;
+  }
+
+  // 位置更新
+  local.pos.addScaledVector(local.vel, dt);
+
+  // 地面コリジョン
+  if (local.pos.y <= PLAYER_HEIGHT) {
+    local.pos.y    = PLAYER_HEIGHT;
+    local.vel.y    = 0;
+    local.onGround = true;
+  }
+
+  // ワールド境界
+  const BOUND = 195;
+  local.pos.x = THREE.MathUtils.clamp(local.pos.x, -BOUND, BOUND);
+  local.pos.z = THREE.MathUtils.clamp(local.pos.z, -BOUND, BOUND);
+
+  camera.position.copy(local.pos);
+
+  // ポーズ送信
+  const now = performance.now();
+  if (now - lastPoseSent >= POSE_INTERVAL_MS && local.connected) {
+    lastPoseSent = now;
+    const quat = new THREE.Quaternion();
+    quat.setFromEuler(new THREE.Euler(0, local.yaw, 0, 'YXZ'));
+    send({
+      type: 'update_pose',
+      position: [local.pos.x, local.pos.y, local.pos.z],
+      rotation: [quat.x, quat.y, quat.z, quat.w],
+      velocity: [local.vel.x, local.vel.y, local.vel.z],
+      timestamp_ms: Math.floor(now),
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Ping
+// ═══════════════════════════════════════════════════════════════
+setInterval(() => {
+  if (local.connected) {
+    pingStart = performance.now();
+    send({ type: 'ping', client_timestamp_ms: Math.floor(pingStart) });
+  }
+}, PING_INTERVAL_MS);
+
+// ═══════════════════════════════════════════════════════════════
+// チャット UI
+// ═══════════════════════════════════════════════════════════════
+let chatOpen = false;
+
+function openChat() {
+  chatOpen = true;
+  if (pointerLocked) document.exitPointerLock();
+  document.getElementById('chat-input-area').style.display = 'block';
+  document.getElementById('chat-input').focus();
+}
+
+function closeChat() {
+  chatOpen = false;
+  document.getElementById('chat-input-area').style.display = 'none';
+  document.getElementById('chat-input').value = '';
+}
+
+function sendChat() {
+  const text = document.getElementById('chat-input').value.trim();
+  if (text && local.connected) {
+    send({ type: 'chat', text });
+    closeChat();
+  }
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.code === 'Enter') { e.preventDefault(); sendChat(); }
+  if (e.code === 'Escape') { closeChat(); }
+});
+document.getElementById('chat-send').addEventListener('click', sendChat);
+
+function addChatMsg(text, cls = '') {
+  const area = document.getElementById('chat-area');
+  const el   = document.createElement('div');
+  el.className = 'chat-msg ' + cls;
+  el.textContent = text;
+  area.appendChild(el);
+  // 最大 20 件
+  while (area.children.length > 20) area.removeChild(area.firstChild);
+  // 自動フェードアウト
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 1000); }, 8000);
+}
+
+function addSystemMsg(text) {
+  addChatMsg(text, 'system');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ミニマップ
+// ═══════════════════════════════════════════════════════════════
+const minimapCtx = document.getElementById('minimap-canvas').getContext('2d');
+
+function drawMinimap() {
+  const W = 140, H = 140, RANGE = 100;
+  minimapCtx.clearRect(0, 0, W, H);
+  minimapCtx.fillStyle = 'rgba(0,0,0,0.8)';
+  minimapCtx.fillRect(0, 0, W, H);
+
+  function worldToMap(wx, wz) {
+    const cx = W / 2 + (wx - local.pos.x) * (W / 2) / RANGE;
+    const cy = H / 2 + (wz - local.pos.z) * (H / 2) / RANGE;
+    return [cx, cy];
+  }
+
+  // 他プレイヤー
+  remoteAvatars.forEach(av => {
+    const [mx, my] = worldToMap(av.mesh.position.x, av.mesh.position.z);
+    const c = parseColor(av.color);
+    minimapCtx.fillStyle = `rgb(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)})`;
+    minimapCtx.beginPath();
+    minimapCtx.arc(mx, my, 4, 0, Math.PI * 2);
+    minimapCtx.fill();
+  });
+
+  // 自分 (白三角)
+  minimapCtx.save();
+  minimapCtx.translate(W / 2, H / 2);
+  minimapCtx.rotate(-local.yaw);
+  minimapCtx.fillStyle = '#ffffff';
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(0, -7);
+  minimapCtx.lineTo(4, 5);
+  minimapCtx.lineTo(-4, 5);
+  minimapCtx.closePath();
+  minimapCtx.fill();
+  minimapCtx.restore();
+
+  // 円枠
+  minimapCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+  minimapCtx.lineWidth = 1;
+  minimapCtx.beginPath();
+  minimapCtx.arc(W/2, H/2, W/2 - 1, 0, Math.PI * 2);
+  minimapCtx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HUD 更新
+// ═══════════════════════════════════════════════════════════════
+function updateStatusBar() {
+  const pingEl = document.getElementById('status-ping');
+  pingEl.textContent = `Ping: ${Math.round(latency)}ms`;
+  pingEl.className = 'status-pill ' + (latency < 100 ? 'ping-good' : 'ping-bad');
+
+  document.getElementById('status-users').textContent = `👥 ${userCount}`;
+  document.getElementById('status-online').textContent =
+    local.connected ? '🟢 Online' : '🔴 Offline';
+}
+
+function showHUD() {
+  document.getElementById('hud').style.display = 'block';
+}
+
+// アバターバッジ
+function drawAvatarBadge(color) {
+  const canvas2 = document.getElementById('avatar-badge');
+  const ctx = canvas2.getContext('2d');
+  const c = parseColor(color);
+  ctx.clearRect(0, 0, 32, 32);
+  ctx.beginPath();
+  ctx.arc(16, 16, 14, 0, Math.PI * 2);
+  ctx.fillStyle = `rgb(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)})`;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ログイン
+// ═══════════════════════════════════════════════════════════════
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.getElementById('btn-connect').addEventListener('click', () => {
+  const name    = document.getElementById('input-name').value.trim() || 'Player';
+  const color   = document.getElementById('input-color').value;
+  const worldId = document.getElementById('input-world').value;
+
+  local.name  = name;
+  local.color = color;
+
+  document.getElementById('hud-name').textContent = name;
+  drawAvatarBadge(color);
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+
+  setTimeout(() => {
+    document.getElementById('loading').style.display = 'none';
+    connectWS(name, color, worldId);
+  }, 500);
+});
+
+// Enter キーでもログイン
+document.getElementById('input-name').addEventListener('keydown', e => {
+  if (e.code === 'Enter') document.getElementById('btn-connect').click();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// メインレンダーループ
+// ═══════════════════════════════════════════════════════════════
+let lastTime = performance.now();
+let frameCount = 0;
+
+// 光柱のアニメーション用
+const glowMeshes = [];
+scene.traverse(o => {
+  if (o.isMesh && o.material && o.material.emissiveIntensity > 0) {
+    glowMeshes.push(o);
+  }
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const now = performance.now();
+  const dt  = Math.min((now - lastTime) / 1000, 0.05); // 最大 50ms
+  lastTime  = now;
+  frameCount++;
+
+  updatePlayer(dt);
+
+  // リモートアバター更新
+  remoteAvatars.forEach(av => av.update(dt));
+
+  // 光柱パルス
+  const elapsed = (now - startTime) / 1000;
+  glowMeshes.forEach((m, i) => {
+    m.material.emissiveIntensity = 0.8 + Math.sin(elapsed * 2 + i) * 0.4;
+  });
+
+  // ミニマップ (6fps)
+  if (frameCount % 10 === 0) drawMinimap();
+
+  renderer.render(scene, camera);
+  css2dRenderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>

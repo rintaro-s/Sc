@@ -1,0 +1,92 @@
+
+🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐
+CR-Bridge Metaverse E2E Integration Test
+🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐🌐
+
+↪️  Checking if metaverse-server is running...
+✅ Server is running
+
+
+============================================================
+Test 1: Basic Connection
+============================================================
+✅ [TestUser] Connected to ws://localhost:8082/ws
+  📌 [TestUser] Session: d4536ccf-867e-439b-9fe6-4043607c03a8
+✅ Test 1 passed
+🔌 [TestUser] Disconnected
+
+============================================================
+Test 2: World Join
+============================================================
+  ⚠️  [TestUser] Listen error: sent 1000 (OK); no close frame received
+✅ [User1] Connected to ws://localhost:8082/ws
+  📌 [User1] Session: 90d8a82f-06f2-40a6-a5f2-6fa301a107a8
+  → [User1] Join world: default
+  🌍 [User1] World state: 1 entities
+✅ Test 2 passed (1 world_state messages)
+🔌 [User1] Disconnected
+
+============================================================
+Test 3: Multi-Client Pose Synchronization
+============================================================
+  ⚠️  [User1] Listen error: sent 1000 (OK); no close frame received
+✅ [Alice] Connected to ws://localhost:8082/ws
+  📌 [Alice] Session: 6f911ba9-3380-494c-978f-4f6556fd5b01
+✅ [Bob] Connected to ws://localhost:8082/ws
+  📌 [Bob] Session: 4c876513-c67d-408f-9b7c-cc5fa29af360
+  → [Alice] Join world: default
+  🌍 [Alice] World state: 1 entities
+  → [Bob] Join world: default
+  🌍 [Bob] World state: 2 entities
+  📍 [Bob] Pose from Alice: [5.0, 0.0, 10.0]
+  Client 1 sent pose
+  Client 2 received 1 entity_pose messages
+✅ Test 3 passed (Pose sync working)
+🔌 [Alice] Disconnected
+  ⚠️  [Alice] Listen error: sent 1000 (OK); no close frame received
+🔌 [Bob] Disconnected
+  ⚠️  [Bob] Listen error: sent 1000 (OK); no close frame received
+
+============================================================
+Test 4: Chat Messaging
+============================================================
+✅ [Alice] Connected to ws://localhost:8082/ws
+  📌 [Alice] Session: c062e7d8-81f9-46ab-b73b-079b4336b259
+✅ [Bob] Connected to ws://localhost:8082/ws
+  📌 [Bob] Session: de4aaae4-49b2-4023-93a6-412c3d44f16e
+  → [Alice] Join world: default
+  🌍 [Alice] World state: 1 entities
+  → [Bob] Join world: default
+  🌍 [Bob] World state: 2 entities
+  → [Alice] Chat: Hello Bob!
+  💬 [Bob] Chat from Unknown: Hello Bob!
+  💬 [Alice] Chat from Unknown: Hello Bob!
+✅ Test 4 passed (Chat working)
+🔌 [Alice] Disconnected
+  ⚠️  [Alice] Listen error: sent 1000 (OK); no close frame received
+🔌 [Bob] Disconnected
+  ⚠️  [Bob] Listen error: sent 1000 (OK); no close frame received
+
+============================================================
+Test 5: Ping/Latency
+============================================================
+✅ [ClientWithPing] Connected to ws://localhost:8082/ws
+  📌 [ClientWithPing] Session: 5ffb2d1a-13ce-4279-9ba0-06218f47651e
+  → [ClientWithPing] Join world: default
+  🌍 [ClientWithPing] World state: 1 entities
+  🏓 [ClientWithPing] Ping latency: 0ms
+✅ Test 5 passed (Ping working)
+🔌 [ClientWithPing] Disconnected
+
+============================================================
+TEST SUMMARY
+============================================================
+✅ PASS: Basic Connection
+✅ PASS: World Join
+✅ PASS: Multi-Client Sync
+✅ PASS: Chat Messaging
+✅ PASS: Ping/Latency
+
+Total: 5/5 tests passed
+============================================================
+  ⚠️  [ClientWithPing] Listen error: sent 1000 (OK); no close frame received
